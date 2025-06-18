@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Process Scheduler Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .process-block {
+            transition: all 0.3s ease;
+        }
+        @keyframes processRunning {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .running {
+            animation: processRunning 1s infinite;
+            border: 2px solid #22c55e;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen p-4">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold text-center text-slate-800 mb-8">Process Scheduler Simulation</h1>
+        
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Add New Process</h2>
+            <div class="flex flex-wrap gap-4">
+                <input type="text" id="processName" placeholder="Process Name" class="border p-2 rounded">
+                <input type="number" id="burstTime" placeholder="Burst Time (ms)" class="border p-2 rounded">
+                <input type="number" id="priority" placeholder="Priority (optional)" class="border p-2 rounded">
+                <button onclick="addProcess()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    Add Process
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4">Queue</h2>
+                <div id="processQueue" class="space-y-2"></div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4">Currently Running</h2>
+                <div id="currentProcess" class="text-center p-4">
+                    No process running
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">Controls</h2>
+            <div class="flex flex-wrap gap-4">
+                <select id="algorithm" class="border p-2 rounded">
+                    <option value="fcfs">First Come First Serve</option>
+                    <option value="sjf">Shortest Job First</option>
+                    <option value="priority">Priority</option>
+                </select>
+                <button onclick="startScheduler()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+                    Start
+                </button>
+                <button onclick="pauseScheduler()" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">
+                    Pause
+                </button>
+                <button onclick="resetScheduler()" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
+                    Reset
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let processes = [];
+        let isRunning = false;
+        let currentProcess = null;
+        let schedulerInterval;
+
+        function addProcess() {
+            const name = document.getElementById('processName').value;
+            const burstTime = parseInt(document.getElementById('burstTime').value);
+            const priority = parseInt(document.getElementById('priority').value) || 0;
+
+            if (!name || !burstTime) {
+                alert('Please fill in process name and burst time!');
+                return;
+            }
+
+            processes.push({
+                name,
+                burstTime,
+                priority,
+                remainingTime: burstTime
+            });
+
+            updateQueueDisplay();
+            clearInputs();
+        }
+
+        function clearInputs() {
+            document.getElementById('processName').value = '';
+            document.getElementById('burstTime').value = '';
+            document.getElementById('priority').value = '';
+        }
+
+        function updateQueueDisplay() {
+            const queueDiv = document.getElementById('processQueue');
+            queueDiv.innerHTML = '';
+
+            processes.forEach((process, index) => {
+                const processElement = document.createElement('div');
+                processElement.className = 'process-block bg-slate-50 p-3 rounded border';
+                processElement.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <span class="font-semibold">${process.name}</span>
+                        <span class="text-sm">
+                            Remaining: ${process.remainingTime}ms
+                            ${process.priority ? ` | Priority: ${process.priority}` : ''}
+                        </span>
+                    </div>
+                `;
+                queueDiv.appendChild(processElement);
+            });
+        }
+
+        function updateCurrentProcess() {
+            const currentProcessDiv = document.getElementById('currentProcess');
+            if (currentProcess) {
+                currentProcessDiv.innerHTML = `
+                    <div class="process-block running bg-slate-50 p-4 rounded">
+                        <div class="font-semibold">${currentProcess.name}</div>
+                        <div class="text-sm">Remaining: ${currentProcess.remainingTime}ms</div>
+                    </div>
+                `;
+            } else {
+                currentProcessDiv.innerHTML = 'No process running';
+            }
+        }
+
+        function startScheduler() {
+            if (processes.length === 0) {
+                alert('No processes in queue!');
+                return;
+            }
+
+            isRunning = true;
+            if (!schedulerInterval) {
+                schedulerInterval = setInterval(runScheduler, 1000);
+            }
+        }
+
+        function pauseScheduler() {
+            isRunning = false;
+            clearInterval(schedulerInterval);
+            schedulerInterval = null;
+        }
+
+        function resetScheduler() {
+            pauseScheduler();
+            processes = [];
+            currentProcess = null;
+            updateQueueDisplay();
+            updateCurrentProcess();
+        }
+
+        function runScheduler() {
+            if (!isRunning) return;
+
+            const algorithm = document.getElementById('algorithm').value;
+
+            if (!currentProcess) {
+                switch(algorithm) {
+                    case 'fcfs':
+                        currentProcess = processes.shift();
+                        break;
+                    case 'sjf':
+                        currentProcess = processes.reduce((min, p) => 
+                            p.remainingTime < min.remainingTime ? p : min, processes[0]);
+                        processes = processes.filter(p => p !== currentProcess);
+                        break;
+                    case 'priority':
+                        currentProcess = processes.reduce((max, p) => 
+                            p.priority > max.priority ? p : max, processes[0]);
+                        processes = processes.filter(p => p !== currentProcess);
+                        break;
+                }
+            }
+
+            if (currentProcess) {
+                currentProcess.remainingTime--;
+                
+                if (currentProcess.remainingTime <= 0) {
+                    currentProcess = null;
+                }
+
+                updateCurrentProcess();
+                updateQueueDisplay();
+
+                if (processes.length === 0 && !currentProcess) {
+                    pauseScheduler();
+                    alert('All processes completed!');
+                }
+            }
+        }
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
